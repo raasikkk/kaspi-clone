@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: kaspi-gateway-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secure_postgres_password_123
+      POSTGRES_DB: kaspi_gateway
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '5434:5432'
+
+  web:
+    build: .
+    container_name: kaspi-gateway-app
+    restart: always
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=postgresql://postgres:secure_postgres_password_123@db:5432/kaspi_gateway
+      - PORT=3000
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

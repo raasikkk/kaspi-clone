@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Подключение Kaspi Pay — Панель Интеграции</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        --card-bg: rgba(30, 41, 59, 0.7);
+        --border-color: rgba(99, 102, 241, 0.2);
+        --accent-color: #6366f1;
+        --accent-hover: #4f46e5;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --success-color: #10b981;
+        --error-color: #ef4444;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background: var(--bg-gradient);
+        color: var(--text-main);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 480px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        backdrop-filter: blur(16px);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        transition:
+          transform 0.3s ease,
+          box-shadow 0.3s ease;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 35px;
+      }
+
+      .header svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 15px;
+        color: var(--accent-color);
+        filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.5));
+      }
+
+      .header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
+      }
+
+      .header p {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+
+      .form-group {
+        margin-bottom: 24px;
+        position: relative;
+      }
+
+      .form-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .form-group input {
+        width: 100%;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 14px 16px;
+        color: var(--text-main);
+        font-family: inherit;
+        font-size: 15px;
+        outline: none;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+
+      .form-group input:focus {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+      }
+
+      .btn {
+        width: 100%;
+        background: var(--accent-color);
+        color: #ffffff;
+        border: none;
+        border-radius: 12px;
+        padding: 15px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          background-color 0.2s ease,
+          transform 0.1s ease;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn:hover {
+        background: var(--accent-hover);
+      }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .btn:disabled {
+        background: var(--text-muted);
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: none;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .status-msg {
+        margin-top: 20px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        font-size: 14px;
+        display: none;
+        line-height: 1.4;
+      }
+
+      .status-msg.success {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #34d399;
+        display: block;
+      }
+
+      .status-msg.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        display: block;
+      }
+
+      .otp-section {
+        display: none;
+        animation: fadeIn 0.4s ease forwards;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .footer {
+        margin-top: 30px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+          />
+        </svg>
+        <h1>Подключение Kaspi Pay</h1>
+        <p>Свяжите терминал кассира с вашей интеграционной панелью</p>
+      </div>
+
+      <form id="connect-form" onsubmit="event.preventDefault()">
+        <!-- Шаг 1: Ввод ключа и телефона -->
+        <div id="credentials-section">
+          <div class="form-group">
+            <label for="api-key">Ключ API театра</label>
+            <input type="text" id="api-key" placeholder="apipay_org_..." required autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label for="phone">Номер телефона кассира</label>
+            <input type="tel" id="phone" placeholder="77077008371" required />
+          </div>
+
+          <button type="button" id="send-sms-btn" class="btn" onclick="sendSms()">
+            <span class="spinner" id="sms-spinner"></span>
+            <span>Отправить код SMS</span>
+          </button>
+        </div>
+
+        <!-- Шаг 1.5: Ввод пароля Kaspi (если требуется) -->
+        <div id="password-section" class="otp-section">
+          <div class="form-group">
+            <label for="password">Пароль от аккаунта Kaspi</label>
+            <input type="password" id="password" placeholder="Введите пароль Kaspi" autocomplete="off" />
+          </div>
+
+          <button type="button" id="send-password-btn" class="btn" onclick="sendPassword()">
+            <span class="spinner" id="password-spinner"></span>
+            <span>Подтвердить пароль</span>
+          </button>
+        </div>
+
+        <!-- Шаг 2: Ввод OTP -->
+        <div id="otp-section" class="otp-section">
+          <div class="form-group">
+            <label for="otp">Код подтверждения из SMS</label>
+            <input type="text" id="otp" placeholder="1234" maxlength="6" autocomplete="off" />
+          </div>
+
+          <button type="button" id="verify-btn" class="btn" onclick="verifyOtp()">
+            <span class="spinner" id="verify-spinner"></span>
+            <span>Подтвердить код</span>
+          </button>
+        </div>
+
+        <div id="message-box" class="status-msg"></div>
+      </form>
+
+      <div class="footer">Kaspi Pay POS Gateway &copy; 2026. Все права защищены.</div>
+    </div>
+
+    <script>
+      let activeProcessId = null;
+
+      function showMessage(text, isError = false) {
+        const box = document.getElementById('message-box');
+        box.textContent = text;
+        box.className = 'status-msg ' + (isError ? 'error' : 'success');
+      }
+
+      function clearMessage() {
+        const box = document.getElementById('message-box');
+        box.textContent = '';
+        box.className = 'status-msg';
+      }
+
+      async function sendSms() {
+        const apiKey = document.getElementById('api-key').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+
+        if (!apiKey || !phone) {
+          showMessage('Заполните API-ключ и номер телефона.', true);
+          return;
+        }
+
+        const smsBtn = document.getElementById('send-sms-btn');
+        const spinner = document.getElementById('sms-spinner');
+
+        smsBtn.disabled = true;
+        spinner.style.display = 'block';
+        clearMessage();
+
+        try {
+          // Шаг A: Инициализация сессии
+          const initResp = await fetch('/api/auth/init', { method: 'POST' });
+          const initData = await initResp.json();
+
+          if (!initData.success) {
+            throw new Error(initData.error || 'Не удалось инициализировать сессию.');
+          }
+
+          activeProcessId = initData.processId;
+
+          // Шаг B: Отправка телефона
+          const phoneResp = await fetch('/api/auth/send-phone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumber: phone, processId: activeProcessId }),
+          });
+          const phoneData = await phoneResp.json();
+
+          if (!phoneData.success) {
+            // Для части аккаунтов Kaspi вместо SMS сразу просит пароль —
+            // SMS придёт уже после того, как пароль принят.
+            if (phoneData.view === 'KPEnterLoginPassword') {
+              showMessage('Для вашего аккаунта Kaspi требуется пароль.');
+              document.getElementById('credentials-section').style.display = 'none';
+              document.getElementById('password-section').style.display = 'block';
+              return;
+            }
+            throw new Error(phoneData.error || phoneData.desc || 'Не удалось отправить телефон.');
+          }
+
+          showMessage(phoneData.desc || 'Код успешно отправлен.');
+          document.getElementById('credentials-section').style.display = 'none';
+          document.getElementById('otp-section').style.display = 'block';
+        } catch (err) {
+          showMessage(err.message, true);
+          smsBtn.disabled = false;
+        } finally {
+          spinner.style.display = 'none';
+        }
+      }
+
+      async function sendPassword() {
+        const password = document.getElementById('password').value;
+        if (!password) {
+          showMessage('Введите пароль от аккаунта Kaspi.', true);
+          return;
+        }
+
+        const btn = document.getElementById('send-password-btn');
+        const spinner = document.getElementById('password-spinner');
+        btn.disabled = true;
+        spinner.style.display = 'block';
+        clearMessage();
+
+        try {
+          const resp = await fetch('/api/auth/send-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, processId: activeProcessId }),
+          });
+          const data = await resp.json();
+
+          if (!data.success) {
+            throw new Error(data.error || data.desc || 'Неверный пароль.');
+          }
+
+          showMessage(data.desc || 'Пароль подтверждён. Код SMS отправлен.');
+          document.getElementById('password-section').style.display = 'none';
+          document.getElementById('otp-section').style.display = 'block';
+        } catch (err) {
+          showMessage(err.message, true);
+          btn.disabled = false;
+        } finally {
+          spinner.style.display = 'none';
+        }
+      }
+
+      async function verifyOtp() {
+        const apiKey = document.getElementById('api-key').value.trim();
+        const otp = document.getElementById('otp').value.trim();
+
+        if (!otp) {
+          showMessage('Введите код из SMS.', true);
+          return;
+        }
+
+        const verifyBtn = document.getElementById('verify-btn');
+        const spinner = document.getElementById('verify-spinner');
+
+        verifyBtn.disabled = true;
+        spinner.style.display = 'block';
+        clearMessage();
+
+        try {
+          const resp = await fetch('/api/auth/verify-otp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': apiKey,
+            },
+            body: JSON.stringify({ otp, processId: activeProcessId }),
+          });
+          const data = await resp.json();
+
+          if (resp.status !== 200 || !data.success) {
+            throw new Error(data.error || 'Неверный код или ошибка привязки.');
+          }
+
+          showMessage('Поздравляем! Ваш терминал Kaspi Pay успешно привязан и сохранен в базе данных.');
+          document.getElementById('otp-section').style.display = 'none';
+        } catch (err) {
+          showMessage(err.message, true);
+          verifyBtn.disabled = false;
+        } finally {
+          spinner.style.display = 'none';
+        }
+      }
+    </script>
+  </body>
+</html>

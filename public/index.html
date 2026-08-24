@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kaspi Pay</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f5f5f5;
+        color: #1a1a1a;
+      }
+      .container {
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      h1 {
+        text-align: center;
+        color: #e31e24;
+        font-size: 24px;
+        margin: 16px 0;
+      }
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+      .card h2 {
+        font-size: 18px;
+        margin-bottom: 12px;
+        color: #333;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: #888;
+        margin-bottom: 4px;
+        margin-top: 12px;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        font-size: 16px;
+        outline: none;
+      }
+      input:focus {
+        border-color: #e31e24;
+      }
+      .btn {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 12px;
+      }
+      .btn-primary {
+        background: #e31e24;
+        color: #fff;
+      }
+      .btn-primary:disabled {
+        background: #ccc;
+      }
+      .btn-secondary {
+        background: #f0f0f0;
+        color: #333;
+      }
+      .btn-danger {
+        background: #ff3b30;
+        color: #fff;
+      }
+      .status-bar {
+        padding: 10px 16px;
+        border-radius: 10px;
+        margin-bottom: 12px;
+        font-size: 14px;
+        text-align: center;
+      }
+      .status-ok {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+      .status-err {
+        background: #ffebee;
+        color: #c62828;
+      }
+      .status-info {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+      .status-warn {
+        background: #fff3e0;
+        color: #e65100;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .badge-pending {
+        background: #fff3e0;
+        color: #e65100;
+      }
+      .badge-paid {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+      .badge-canceled {
+        background: #ffebee;
+        color: #c62828;
+      }
+      .badge-expired {
+        background: #f5f5f5;
+        color: #888;
+      }
+      .hidden {
+        display: none;
+      }
+      .otp-input {
+        letter-spacing: 12px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .phone-prefix {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .phone-prefix span {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        white-space: nowrap;
+      }
+      .phone-prefix input {
+        flex: 1;
+      }
+      .step-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .step-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ddd;
+      }
+      .step-dot.active {
+        background: #e31e24;
+      }
+      .step-dot.done {
+        background: #4caf50;
+      }
+      .op-item {
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+      }
+      .op-item:last-child {
+        border-bottom: none;
+      }
+      .op-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .op-name {
+        font-weight: 500;
+      }
+      .op-amount {
+        font-weight: 700;
+      }
+      .op-date {
+        font-size: 12px;
+        color: #888;
+        margin-top: 2px;
+      }
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f5f5f5;
+      }
+      .detail-label {
+        color: #888;
+        font-size: 14px;
+      }
+      .detail-value {
+        font-weight: 500;
+        font-size: 14px;
+        text-align: right;
+      }
+      .loader {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border: 2px solid #fff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        vertical-align: middle;
+        margin-left: 8px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 16px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #ddd;
+      }
+      .tab {
+        flex: 1;
+        padding: 10px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #fff;
+        border: none;
+      }
+      .tab.active {
+        background: #e31e24;
+        color: #fff;
+      }
+      .user-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .user-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #e31e24;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .user-details {
+        flex: 1;
+      }
+      .user-name {
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .user-org {
+        font-size: 13px;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🏦 Kaspi Pay</h1>
+
+      <!-- ═══ AUTH SCREEN ═══ -->
+      <div id="authScreen">
+        <div class="card">
+          <div class="step-indicator">
+            <div class="step-dot" id="dot1"></div>
+            <div class="step-dot" id="dot2"></div>
+            <div class="step-dot" id="dot3"></div>
+          </div>
+
+          <!-- Step 1: Phone -->
+          <div id="authStep1">
+            <h2>Вход по номеру телефона</h2>
+            <p style="font-size: 14px; color: #666; margin-bottom: 12px">Войдите с аккаунта кассира Kaspi Pay</p>
+            <label>Номер телефона</label>
+            <div class="phone-prefix">
+              <span>+7</span>
+              <input type="tel" id="phoneInput" placeholder="XXX XXX XX XX" inputmode="numeric" />
+            </div>
+            <button class="btn btn-primary" id="btnSendPhone" onclick="sendPhone()">Получить SMS код</button>
+          </div>
+
+          <!-- Step 2: OTP -->
+          <div id="authStep2" class="hidden">
+            <h2>Введите код из SMS</h2>
+            <p id="otpDesc" style="font-size: 14px; color: #666; margin-bottom: 12px"></p>
+            <label>Код подтверждения</label>
+            <input type="tel" id="otpInput" class="otp-input" placeholder="• • • •" maxlength="6" inputmode="numeric" />
+            <button class="btn btn-primary" id="btnVerifyOtp" onclick="verifyOtp()">Подтвердить</button>
+            <button class="btn btn-secondary" onclick="resetAuth()">Назад</button>
+          </div>
+
+          <!-- Step 3: Finishing -->
+          <div id="authStep3" class="hidden">
+            <h2>Завершение входа...</h2>
+            <p style="text-align: center; color: #888; margin: 20px 0">
+              Подключение к Kaspi Pay<span
+                class="loader"
+                style="border-color: #e31e24; border-top-color: transparent"
+              ></span>
+            </p>
+          </div>
+
+          <div id="authMsg" class="hidden" style="margin-top: 12px"></div>
+        </div>
+      </div>
+
+      <!-- ═══ MAIN SCREEN ═══ -->
+      <div id="mainScreen" class="hidden">
+        <!-- User info -->
+        <div class="card" id="userCard">
+          <div class="user-info">
+            <div class="user-avatar" id="userAvatar">K</div>
+            <div class="user-details">
+              <div class="user-name" id="userName">—</div>
+              <div class="user-org" id="userOrg">—</div>
+            </div>
+            <button
+              class="btn btn-secondary"
+              style="width: auto; margin: 0; padding: 8px 16px; font-size: 13px"
+              onclick="logout()"
+            >
+              Выйти
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" id="tabInvoice" onclick="switchTab('invoice')">Счёт</button>
+          <button class="tab" id="tabQr" onclick="switchTab('qr')">Создать QR</button>
+          <button class="tab" id="tabHistory" onclick="switchTab('history')">История</button>
+          <button class="tab" id="tabSales" onclick="switchTab('sales')">Продажи</button>
+        </div>
+
+        <!-- Invoice Tab -->
+        <div id="invoiceTab">
+          <div class="card">
+            <h2>Выставить счёт</h2>
+            <label>Телефон клиента</label>
+            <div class="phone-prefix">
+              <span>+7</span>
+              <input type="tel" id="clientPhone" placeholder="XXX XXX XX XX" inputmode="numeric" />
+            </div>
+            <div
+              id="clientInfo"
+              class="hidden"
+              style="
+                margin-top: 8px;
+                padding: 8px 12px;
+                background: #e8f5e9;
+                border-radius: 8px;
+                font-size: 14px;
+                color: #2e7d32;
+              "
+            ></div>
+            <label>Сумма (₸)</label>
+            <input type="number" id="invoiceAmount" placeholder="0" min="1" inputmode="numeric" />
+            <label>Комментарий</label>
+            <input type="text" id="invoiceComment" placeholder="Оплата" />
+            <button class="btn btn-primary" id="btnCreate" onclick="createInvoice()">Выставить счёт</button>
+          </div>
+
+          <!-- Invoice result -->
+          <div id="invoiceResult" class="hidden">
+            <div class="card">
+              <h2>Счёт <span id="invoiceOpId"></span></h2>
+              <div id="invoiceDetails"></div>
+              <button class="btn btn-danger" id="btnCancel" onclick="cancelInvoice()" style="margin-top: 12px">
+                Отменить счёт
+              </button>
+              <button class="btn btn-secondary" onclick="refreshInvoice()">Обновить статус</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- QR Tab -->
+        <div id="qrTab" class="hidden">
+          <div class="card">
+            <h2>Создать QR для оплаты</h2>
+            <label>Сумма (₸)</label>
+            <input type="number" id="qrAmount" placeholder="0" min="1" inputmode="numeric" />
+            <button class="btn btn-primary" id="btnCreateQr" onclick="createQr()">Создать QR</button>
+          </div>
+
+          <!-- QR result -->
+          <div id="qrResult" class="hidden">
+            <div class="card">
+              <h2>QR-код для оплаты</h2>
+              <div id="qrStatus" class="status-bar status-info" style="margin-bottom: 12px">
+                Ожидание сканирования...
+              </div>
+              <div id="qrTimer" style="text-align: center; font-size: 14px; color: #888; margin-bottom: 12px"></div>
+              <div id="qrCodeContainer" style="text-align: center; margin: 16px 0"></div>
+              <div id="qrDetails"></div>
+              <button class="btn btn-secondary" onclick="resetQr()">Новый QR</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="historyTab" class="hidden">
+          <div class="card">
+            <h2>История операций</h2>
+            <button class="btn btn-secondary" onclick="loadHistory()" style="margin-bottom: 12px">Обновить</button>
+            <div id="historyList"><p style="color: #888; text-align: center">Нажмите «Обновить»</p></div>
+          </div>
+
+          <div id="historyDetail" class="hidden">
+            <div class="card">
+              <h2>Детали операции</h2>
+              <div id="historyDetailContent"></div>
+              <button class="btn btn-danger hidden" id="btnCancelFromHistory" onclick="cancelFromHistory()">
+                Отменить
+              </button>
+              <button
+                class="btn btn-secondary"
+                onclick="document.getElementById('historyDetail').classList.add('hidden')"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sales Tab -->
+        <div id="salesTab" class="hidden">
+          <div class="card">
+            <h2>Продажи и возвраты</h2>
+            <div id="salesStats" style="margin-bottom: 12px"></div>
+            <button class="btn btn-secondary" onclick="loadSales()" style="margin-bottom: 12px">Обновить</button>
+            <div id="salesList"><p style="color: #888; text-align: center">Нажмите «Обновить»</p></div>
+          </div>
+
+          <div id="salesDetail" class="hidden">
+            <div class="card">
+              <h2>Детали операции</h2>
+              <div id="salesDetailContent"></div>
+              <div id="refundSection" class="hidden" style="margin-top: 12px">
+                <label>Сумма возврата (₸)</label>
+                <input type="number" id="refundAmount" placeholder="0" min="1" inputmode="numeric" />
+                <button class="btn btn-danger" id="btnRefund" onclick="createRefund()" style="margin-top: 8px">
+                  Сделать возврат
+                </button>
+              </div>
+              <div id="refundMsg" class="hidden" style="margin-top: 8px"></div>
+              <button
+                class="btn btn-secondary"
+                onclick="document.getElementById('salesDetail').classList.add('hidden')"
+                style="margin-top: 8px"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

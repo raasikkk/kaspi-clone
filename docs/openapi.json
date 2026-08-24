@@ -1,0 +1,2775 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Kaspi Pay POS Automation API",
+    "version": "1.0.0",
+    "description": "REST API for integrating POS systems with Kaspi Pay API (SMS Authorization, Invoicing, QR Payments, Operation History, and Refunds)."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Theater API Key used for authentication and permission gating"
+      },
+      "AdminBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Master admin secret token check (ADMIN_SECRET_KEY)"
+      },
+      "TokenSN": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Token-SN",
+        "description": "Session token SN obtained after OTP verification"
+      },
+      "VtokenSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Vtoken-Secret",
+        "description": "Encrypted session token secret"
+      },
+      "ProfileId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Profile-Id",
+        "description": "Organization profile ID (optional, sent after auth)"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Description of the error"
+          }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health Check",
+        "description": "Check if the server is up and running.",
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/init": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Initialize Auth Flow",
+        "description": "Starts the 3-step OTP SMS authentication process. Returns a unique process ID for the next steps.",
+        "responses": {
+          "200": {
+            "description": "Auth flow successfully initialized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "processId": {
+                      "type": "string",
+                      "example": "abc123xx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    },
+                    "view": {
+                      "type": "string",
+                      "example": "EnterPhoneNumber"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or Kaspi API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/send-phone": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Send Phone Number",
+        "description": "Sends the phone number corresponding to the Kaspi Pay cashier account to initiate SMS-OTP code sending.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phoneNumber", "processId"],
+                "properties": {
+                  "phoneNumber": {
+                    "type": "string",
+                    "description": "Phone number in format 7XXXXXXXXXX",
+                    "example": "77001234567"
+                  },
+                  "processId": {
+                    "type": "string",
+                    "description": "Process ID returned by /api/auth/init",
+                    "example": "abc123xx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  }
+                }
+              }
+            }
+          },
+          "responses": {}
+        },
+        "responses": {
+          "200": {
+            "description": "SMS OTP successfully sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "processId": {
+                      "type": "string",
+                      "example": "abc123xx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    },
+                    "desc": {
+                      "type": "string",
+                      "example": "Код отправлен на номер +7 700 *** ** 67"
+                    },
+                    "view": {
+                      "type": "string",
+                      "example": "EnterOtp"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or Kaspi API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verify-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify OTP Code",
+        "description": "Submits the SMS code to complete authorization and generates session credentials.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["otp", "processId"],
+                "properties": {
+                  "otp": {
+                    "type": "string",
+                    "description": "SMS confirmation code received by cashier",
+                    "example": "1234"
+                  },
+                  "processId": {
+                    "type": "string",
+                    "description": "Process ID of the current auth attempt",
+                    "example": "abc123xx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "processId": {
+                      "type": "string",
+                      "example": "abc123xx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    },
+                    "step": {
+                      "type": "string",
+                      "example": "finished"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "OTP verified and finish completed"
+                    },
+                    "tokenSN": {
+                      "type": "string",
+                      "example": "TOKEN_SN_VALUE"
+                    },
+                    "vtokenSecret": {
+                      "type": "string",
+                      "example": "ENCRYPTED_SECRET_STRING"
+                    },
+                    "profileId": {
+                      "type": "integer",
+                      "example": 12345
+                    },
+                    "organizationId": {
+                      "type": "integer",
+                      "example": 67890
+                    },
+                    "orgName": {
+                      "type": "string",
+                      "example": "ИП Иванов"
+                    },
+                    "phone": {
+                      "type": "string",
+                      "example": "77001234567"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "OTP verification failed or Kaspi API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/session": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Check Client Auth State",
+        "description": "Allows frontend clients to verify the existence of a tokenSN.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tokenSN": {
+                    "type": "string",
+                    "example": "TOKEN_SN_VALUE"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Auth state returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "tokenSN": {
+                      "type": "string",
+                      "example": "TOKEN_SN_VALUE"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "description": "Logs out and destroys the current auth state.",
+        "responses": {
+          "200": {
+            "description": "Successfully logged out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invoice/client-info": {
+      "get": {
+        "tags": ["Invoice"],
+        "summary": "Get Client Info",
+        "description": "Retrieves the name and Kaspi account verification details of a client by their phone number.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "phoneNumber",
+            "in": "query",
+            "required": true,
+            "description": "Customer phone number in 7XXXXXXXXXX format",
+            "schema": {
+              "type": "string"
+            },
+            "example": "77001234567"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client details loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "FirstName": {
+                          "type": "string",
+                          "example": "Александр"
+                        },
+                        "MiddleName": {
+                          "type": "string",
+                          "example": "Сергеевич"
+                        },
+                        "LastName": {
+                          "type": "string",
+                          "example": "П."
+                        },
+                        "HasKaspiGold": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Phone number required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "phoneNumber required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Unauthorized / Session error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid or expired vtokenSecret. Re-authenticate."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invoice/create": {
+      "post": {
+        "tags": ["Invoice"],
+        "summary": "Create Remote Invoice",
+        "description": "Sends a payment request invoice directly to a customer's phone number.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phoneNumber", "amount"],
+                "properties": {
+                  "phoneNumber": {
+                    "type": "string",
+                    "example": "77001234567"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "example": 1000
+                  },
+                  "comment": {
+                    "type": "string",
+                    "example": "Оплата заказа #42"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "Id": {
+                          "type": "integer",
+                          "example": 123456
+                        },
+                        "Status": {
+                          "type": "string",
+                          "example": "RemotePaymentCreated"
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 1000
+                        },
+                        "ClientMobile": {
+                          "type": "string",
+                          "example": "77001234567"
+                        },
+                        "ReceiptUrl": {
+                          "type": "string",
+                          "example": "https://..."
+                        },
+                        "OrderNumber": {
+                          "type": "string",
+                          "example": "ORDER-123"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid properties",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API Key suspended, expired, or lacks invoice permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Remote invoicing is not enabled for this API Key."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or Kaspi API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to connect to Kaspi API"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invoice/details": {
+      "get": {
+        "tags": ["Invoice"],
+        "summary": "Get Invoice Status/Details",
+        "description": "Retrieves the status of an existing invoice request using its operation ID.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "operationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "123456"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice details returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "Id": {
+                          "type": "integer",
+                          "example": 123456
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 1000
+                        },
+                        "Status": {
+                          "type": "string",
+                          "example": "Processed"
+                        },
+                        "StatusDesc": {
+                          "type": "string",
+                          "example": "Оплачено"
+                        },
+                        "OrderNumber": {
+                          "type": "string",
+                          "example": "ORDER-12345"
+                        },
+                        "ClientMobile": {
+                          "type": "string",
+                          "example": "77071234567"
+                        },
+                        "ReceiptUrl": {
+                          "type": "string",
+                          "example": "https://pay.kaspi.kz/receipt/..."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing operationId parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "operationId query parameter required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invoice not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invoice/cancel": {
+      "post": {
+        "tags": ["Invoice"],
+        "summary": "Cancel Pending Invoice",
+        "description": "Cancels a remote invoice that hasn't been completed yet.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["operationId"],
+                "properties": {
+                  "operationId": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "Status": {
+                          "type": "string",
+                          "example": "RemotePaymentCanceled"
+                        },
+                        "StatusDesc": {
+                          "type": "string",
+                          "example": "Счет отменен"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing operationId parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "operationId required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invoice not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invoice/history": {
+      "post": {
+        "tags": ["Invoice"],
+        "summary": "Get Recent Invoices History",
+        "description": "Loads the history of recent invoices (up to 20).",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "example": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoices history returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "Id": {
+                            "type": "integer",
+                            "example": 123456
+                          },
+                          "Amount": {
+                            "type": "number",
+                            "example": 1000
+                          },
+                          "Status": {
+                            "type": "string",
+                            "example": "Processed"
+                          },
+                          "StatusDesc": {
+                            "type": "string",
+                            "example": "Оплачено"
+                          },
+                          "CreatedDate": {
+                            "type": "string",
+                            "example": "2026-06-26T16:00:00"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/qr/create": {
+      "post": {
+        "tags": ["QR"],
+        "summary": "Generate QR Payment Token",
+        "description": "Generates a Kaspi Pay QR code redirect link for customer scanning.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "example": 500
+                  },
+                  "latitude": {
+                    "type": "number",
+                    "example": 43.238949
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "example": 76.889709
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "QR code token generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "QrOperationId": {
+                          "type": "integer",
+                          "example": 789012
+                        },
+                        "QrToken": {
+                          "type": "string",
+                          "example": "https://pay.kaspi.kz/pay/..."
+                        },
+                        "ExpireDate": {
+                          "type": "string",
+                          "example": "2026-06-23T12:05:00"
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 500
+                        },
+                        "ReceiptUrl": {
+                          "type": "string",
+                          "example": "https://..."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/qr/status": {
+      "get": {
+        "tags": ["QR"],
+        "summary": "Check QR Payment Status",
+        "description": "Retrieves the status of a QR transaction by its QR operation ID.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "qrOperationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "789012"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status payload returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "Status": {
+                          "type": "string",
+                          "example": "Processed"
+                        },
+                        "StatusDesc": {
+                          "type": "string",
+                          "example": "Оплачено"
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 500
+                        },
+                        "ReceiptUrl": {
+                          "type": "string",
+                          "example": "https://pay.kaspi.kz/receipt/..."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing qrOperationId parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "qrOperationId required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "QR operation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "QR operation not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/operations": {
+      "post": {
+        "tags": ["History"],
+        "summary": "Get Statements History",
+        "description": "Retrieves the history of operations/statements for the specified period.",
+        "security": [
+          {
+            "TokenSN": [],
+            "VtokenSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["endDate"],
+                "properties": {
+                  "endDate": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD",
+                    "example": "2026-06-23"
+                  },
+                  "lastTransactionDate": {
+                    "type": "string",
+                    "description": "Date of last transaction for pagination",
+                    "example": ""
+                  },
+                  "statementPeriodCode": {
+                    "type": "integer",
+                    "description": "Period code offset",
+                    "example": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operations list returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "Id": {
+                            "type": "integer",
+                            "example": 11223344
+                          },
+                          "Amount": {
+                            "type": "number",
+                            "example": 5000
+                          },
+                          "Type": {
+                            "type": "string",
+                            "example": "Sale"
+                          },
+                          "CreatedDate": {
+                            "type": "string",
+                            "example": "2026-06-23T11:45:00.000"
+                          },
+                          "ConsumerName": {
+                            "type": "string",
+                            "example": "АЛИХАН Б."
+                          },
+                          "Status": {
+                            "type": "string",
+                            "example": "Confirmed"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing endDate parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "endDate required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/details": {
+      "post": {
+        "tags": ["History"],
+        "summary": "Get Operation Detail",
+        "description": "Retrieves precise transaction details (payment types, items, commissions).",
+        "security": [
+          {
+            "TokenSN": [],
+            "VtokenSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "description": "Operation ID",
+                    "example": 123456
+                  },
+                  "operationMethod": {
+                    "type": "integer",
+                    "example": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Detailed payload returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "Id": {
+                          "type": "integer",
+                          "example": 11223344
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 5000
+                        },
+                        "Type": {
+                          "type": "string",
+                          "example": "Sale"
+                        },
+                        "CreatedDate": {
+                          "type": "string",
+                          "example": "2026-06-23T11:45:00.000"
+                        },
+                        "ConsumerName": {
+                          "type": "string",
+                          "example": "АЛИХАН Б."
+                        },
+                        "ConsumerCardMask": {
+                          "type": "string",
+                          "example": "4405********1122"
+                        },
+                        "Commission": {
+                          "type": "number",
+                          "example": 47.5
+                        },
+                        "NetAmount": {
+                          "type": "number",
+                          "example": 4952.5
+                        },
+                        "ReceiptUrl": {
+                          "type": "string",
+                          "example": "https://pay.kaspi.kz/receipt/..."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing id parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "id required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Operation details not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Operation details not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/refund/create": {
+      "post": {
+        "tags": ["Refund"],
+        "summary": "Create Refund",
+        "description": "Initiates a refund/reversal process for a previously successful transaction.",
+        "security": [
+          {
+            "TokenSN": [],
+            "VtokenSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["qrOperationId", "returnAmount"],
+                "properties": {
+                  "qrOperationId": {
+                    "type": "integer",
+                    "description": "Operation ID of transaction to refund",
+                    "example": 789012
+                  },
+                  "returnAmount": {
+                    "type": "number",
+                    "description": "Amount to return in tenge",
+                    "example": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refund initialized successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "RefundTxnId": {
+                          "type": "string",
+                          "example": "kaspi_refund_uuid_..."
+                        },
+                        "Status": {
+                          "type": "string",
+                          "example": "Processed"
+                        },
+                        "StatusDesc": {
+                          "type": "string",
+                          "example": "Возврат успешно выполнен"
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 500
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing qrOperationId or returnAmount",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "qrOperationId and returnAmount are required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Invalid API Key"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/session/check": {
+      "get": {
+        "tags": ["Session"],
+        "summary": "Verify Active Kaspi Session",
+        "description": "Performs an active check against Kaspi Pay API to verify if session headers are still valid and authorized.",
+        "security": [
+          {
+            "TokenSN": [],
+            "VtokenSecret": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session active status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session expired or rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Session rejected by Kaspi API."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/keys": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create Theater API Key",
+        "description": "Generates a new API Key for a theater with configured path permissions.",
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Theater name",
+                    "example": "Grand Cinema"
+                  },
+                  "allow_invoice": {
+                    "type": "boolean",
+                    "description": "Enable invoicing permission",
+                    "example": false
+                  },
+                  "allow_qr": {
+                    "type": "boolean",
+                    "description": "Enable QR payments permission",
+                    "example": true
+                  },
+                  "allow_refund": {
+                    "type": "boolean",
+                    "description": "Enable refund permission",
+                    "example": false
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Optional expiration timestamp for the key (ISO-8601)",
+                    "example": "2026-12-31T23:59:59.000Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API Key successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "theater_name": {
+                      "type": "string",
+                      "example": "Grand Cinema"
+                    },
+                    "api_key": {
+                      "type": "string",
+                      "example": "apipay_org_xxxx"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "active"
+                    },
+                    "allow_invoice": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "allow_qr": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "allow_refund": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-12-31T23:59:59.000Z"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "example": "2026-06-25T12:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List All API Keys",
+        "description": "Lists all generated API Keys, their status, permissions, and connection states.",
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of all key profiles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "theater_name": {
+                        "type": "string",
+                        "example": "Grand Cinema"
+                      },
+                      "api_key": {
+                        "type": "string",
+                        "example": "apipay_org_xxxx"
+                      },
+                      "status": {
+                        "type": "string",
+                        "example": "active"
+                      },
+                      "allow_invoice": {
+                        "type": "boolean",
+                        "example": false
+                      },
+                      "allow_qr": {
+                        "type": "boolean",
+                        "example": true
+                      },
+                      "allow_refund": {
+                        "type": "boolean",
+                        "example": false
+                      },
+                      "profile_id": {
+                        "type": "string",
+                        "example": "123456"
+                      },
+                      "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-12-31T23:59:59.000Z"
+                      },
+                      "is_connected": {
+                        "type": "boolean",
+                        "example": true
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "example": "2026-06-25T12:00:00.000Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/keys/{id}": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Update API Key",
+        "description": "Updates permissions, name, or suspension status of a specific API key profile.",
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Numeric key ID",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Grand Cinema Updated"
+                  },
+                  "allow_invoice": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "allow_qr": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "allow_refund": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended"
+                    ],
+                    "example": "suspended"
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Optional expiration timestamp for the key (ISO-8601). Set to null to remove expiration.",
+                    "example": "2026-12-31T23:59:59.000Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "theater_name": {
+                      "type": "string",
+                      "example": "Grand Cinema Updated"
+                    },
+                    "api_key": {
+                      "type": "string",
+                      "example": "apipay_org_xxxx"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "suspended"
+                    },
+                    "allow_invoice": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "allow_qr": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "allow_refund": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-12-31T23:59:59.000Z"
+                    },
+                    "is_connected": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "example": "2026-06-25T12:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key profile not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Admin"],
+        "summary": "Revoke API Key",
+        "description": "Permanently deletes and revokes an API key profile.",
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Numeric key ID",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key successfully deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "API Key for 'Grand Cinema' has been deleted."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key profile not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized admin token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/invoice": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Create Custom Order Invoice",
+        "description": "Generates a remote invoice on Kaspi linked to a unique customer order and upserts the event context inside the local database.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orderId", "eventId", "eventName", "amount", "customerPhone"],
+                "properties": {
+                  "orderId": {
+                    "type": "string",
+                    "description": "Unique order identifier from the ticketing system",
+                    "example": "SM-2026-00481"
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "description": "Unique event identifier",
+                    "example": "moldanazar-live"
+                  },
+                  "eventName": {
+                    "type": "string",
+                    "description": "Display name of the event",
+                    "example": "Moldanazar — Live Concert"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Invoice payment amount in Tenge",
+                    "example": 8000
+                  },
+                  "customerPhone": {
+                    "type": "string",
+                    "description": "Customer mobile phone number in format 7XXXXXXXXXX",
+                    "example": "77077008371"
+                  },
+                  "customerName": {
+                    "type": "string",
+                    "description": "Customer full name (optional)",
+                    "example": "Orken"
+                  },
+                  "customerEmail": {
+                    "type": "string",
+                    "description": "Customer email address (optional)",
+                    "example": "orken@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "StatusCode": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "Data": {
+                      "type": "object",
+                      "properties": {
+                        "Id": {
+                          "type": "integer",
+                          "example": 123456
+                        },
+                        "Status": {
+                          "type": "string",
+                          "example": "RemotePaymentCreated"
+                        },
+                        "Amount": {
+                          "type": "number",
+                          "example": 8000
+                        },
+                        "ClientMobile": {
+                          "type": "string",
+                          "example": "77077008371"
+                        },
+                        "ReceiptUrl": {
+                          "type": "string",
+                          "example": "https://..."
+                        },
+                        "OrderNumber": {
+                          "type": "string",
+                          "example": "ORDER-123"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or Database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/status": {
+      "patch": {
+        "tags": ["Orders"],
+        "summary": "Manually Override Order Status",
+        "description": "Allows administrators to manually set the payment status of an order (e.g. Processed, Cancelled, Refunded) and automatically halts any active background polling for this transaction.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The unique database auto-incrementing ID or the custom POS order number",
+            "schema": {
+              "type": "string"
+            },
+            "example": "SM-2026-00481"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "The new payment status. Note: 'CancelledByUser' is client-side QR payment cancellation, 'RemotePaymentCanceled' is client-side remote invoice rejection, and 'Cancelled' is manual administrator cancellation.",
+                    "enum": [
+                      "pending",
+                      "Processed",
+                      "Wait",
+                      "QrTokenCreated",
+                      "RemotePaymentCreated",
+                      "RemotePaymentCanceled",
+                      "CancelledByUser",
+                      "Cancelled",
+                      "Expired",
+                      "Error",
+                      "Failed",
+                      "Refunded"
+                    ],
+                    "example": "Processed"
+                  },
+                  "status_desc": {
+                    "type": "string",
+                    "description": "Optional description or reason explaining the manual override",
+                    "example": "Manually marked as paid by administrator"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order status manually overridden successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Order status manually updated to Processed."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing status parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found or belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/event/{eventId}": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "Get Event Statistics",
+        "description": "Retrieves aggregated sum of amounts and counts of orders grouped by payment status for a specific event.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "description": "Unique event identifier",
+            "schema": {
+              "type": "string"
+            },
+            "example": "moldanazar-live"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated statistics for event returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_count": {
+                      "type": "string",
+                      "example": "2"
+                    },
+                    "total_amount": {
+                      "type": "number",
+                      "example": 20000
+                    },
+                    "paid_count": {
+                      "type": "string",
+                      "example": "1"
+                    },
+                    "paid_amount": {
+                      "type": "number",
+                      "example": 12000
+                    },
+                    "pending_count": {
+                      "type": "string",
+                      "example": "1"
+                    },
+                    "pending_amount": {
+                      "type": "number",
+                      "example": 8000
+                    },
+                    "cancelled_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "cancelled_amount": {
+                      "type": "number",
+                      "example": 0
+                    },
+                    "expired_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "expired_amount": {
+                      "type": "number",
+                      "example": 0
+                    },
+                    "error_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "error_amount": {
+                      "type": "number",
+                      "example": 0
+                    },
+                    "refunded_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "refunded_amount": {
+                      "type": "number",
+                      "example": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Event not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Database connection error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/organization": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "Get Organization Statistics",
+        "description": "Retrieves aggregated sum of amounts and counts of orders grouped by payment status across all events in the organization.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated statistics for overall organization returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_count": {
+                      "type": "string",
+                      "example": "2"
+                    },
+                    "total_amount": {
+                      "type": "number",
+                      "example": 20000
+                    },
+                    "paid_count": {
+                      "type": "string",
+                      "example": "1"
+                    },
+                    "paid_amount": {
+                      "type": "number",
+                      "example": 12000
+                    },
+                    "pending_count": {
+                      "type": "string",
+                      "example": "1"
+                    },
+                    "pending_amount": {
+                      "type": "number",
+                      "example": 8000
+                    },
+                    "cancelled_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "cancelled_amount": {
+                      "type": "number",
+                      "example": 0
+                    },
+                    "expired_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "expired_amount": {
+                      "type": "number",
+                      "example": 0
+                    },
+                    "error_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "error_amount": {
+                      "type": "number",
+                      "example": 0
+                    },
+                    "refunded_count": {
+                      "type": "string",
+                      "example": "0"
+                    },
+                    "refunded_amount": {
+                      "type": "number",
+                      "example": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/orders": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "List Dashboard Orders",
+        "description": "Provides a paginated, filterable, and searchable list of all checkout order records mapped to their event details.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "query",
+            "required": false,
+            "description": "Filter by specific event ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by specific order payment status. Note: 'CancelledByUser' indicates QR payment cancellation by client, 'RemotePaymentCanceled' indicates remote invoice rejection by client, and 'Cancelled' indicates manual administrator cancellation.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "Processed",
+                "Wait",
+                "QrTokenCreated",
+                "RemotePaymentCreated",
+                "RemotePaymentCanceled",
+                "CancelledByUser",
+                "Cancelled",
+                "Expired",
+                "Error",
+                "Failed",
+                "Refunded"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search term query (customer name, email, phone, or order ID)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number offset for pagination",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Item limits count per page",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard orders list successfully loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "example": 1
+                          },
+                          "key_id": {
+                            "type": "integer",
+                            "example": 2
+                          },
+                          "order_id": {
+                            "type": "string",
+                            "example": "SM-2026-00481"
+                          },
+                          "event_id": {
+                            "type": "string",
+                            "example": "moldanazar-live"
+                          },
+                          "amount": {
+                            "type": "string",
+                            "example": "8000"
+                          },
+                          "customer_name": {
+                            "type": "string",
+                            "example": "Orken"
+                          },
+                          "customer_phone": {
+                            "type": "string",
+                            "example": "77077008371"
+                          },
+                          "customer_email": {
+                            "type": "string",
+                            "example": "orken@example.com"
+                          },
+                          "kaspi_operation_id": {
+                            "type": "string",
+                            "example": "123456789"
+                          },
+                          "type": {
+                            "type": "string",
+                            "example": "invoice"
+                          },
+                          "status": {
+                            "type": "string",
+                            "example": "RemotePaymentCreated"
+                          },
+                          "status_desc": {
+                            "type": "string",
+                            "example": "Счет выставлен"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "example": "2026-06-25T08:15:36.962Z"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "example": "2026-06-25T08:15:36.962Z"
+                          },
+                          "event_name": {
+                            "type": "string",
+                            "example": "Moldanazar — Live Concert"
+                          }
+                        }
+                      }
+                    },
+                    "totalItems": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "page": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "example": 10
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "example": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats/sync": {
+      "post": {
+        "tags": ["Stats"],
+        "summary": "Manual Sync Payment Statuses",
+        "description": "Finds all non-final payment transactions in the database, queries their latest status from Kaspi Pay, and updates the local records.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch manual status update executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "processed": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "synced": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "orderId": {
+                            "type": "string",
+                            "example": "SM-2026-00481"
+                          },
+                          "oldStatus": {
+                            "type": "string",
+                            "example": "RemotePaymentCreated"
+                          },
+                          "newStatus": {
+                            "type": "string",
+                            "example": "Processed"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

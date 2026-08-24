@@ -1,0 +1,7 @@
+[
+  {
+    "url": "https://example.com/webhook",
+    "events": ["payment.success", "payment.failed", "payment.expired"],
+    "secret": "your-webhook-secret"
+  }
+]

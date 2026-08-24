@@ -1,0 +1,19 @@
+/node_modules
+.idea
+.env
+.env.backup
+.DS_Store
+npm-debug.log
+yarn-error.log
+docker-compose.override.yml
+
+# Generated at runtime — must not be committed
+keypair.json
+keypair.json.bak
+ecdh-keypair.json
+device.json
+device.json.bak
+webhooks.json
+tracked-payments.json
+webhook-retries.json
+logs/
